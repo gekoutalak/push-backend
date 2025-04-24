@@ -1,32 +1,48 @@
-﻿const functions = require("firebase-functions");
-const admin = require("firebase-admin");
+﻿const express = require('express');
+const admin = require('firebase-admin');
+const bodyParser = require('body-parser');
 
-admin.initializeApp();
+const app = express();
+app.use(bodyParser.json());
 
-exports.sendPushNotification = functions.https.onRequest(async (req, res) => {
-    try {
-        const { title, body, roles } = req.body;
+// Ανέβασε εδώ το δικό σου Firebase serviceAccountKey.json
+const serviceAccount = require('./serviceAccountKey.json');
 
-        const tokensSnapshot = await admin.firestore()
-            .collection("deviceTokens")
-            .where("role", "in", roles)
-            .get();
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+});
 
-        const tokens = tokensSnapshot.docs.map(doc => doc.data().token).filter(Boolean);
+// Ρίζα για δοκιμή
+app.get('/', (req, res) => {
+    res.send('Backend is working ✅');
+});
 
-        if (tokens.length === 0) {
-            return res.status(404).send("❗ Δεν βρέθηκαν tokens");
-        }
+// Route για αποστολή push notification
+app.post('/sendNotification', async (req, res) => {
+    const { title, body, token } = req.body;
 
-        const message = {
-            notification: { title, body },
-            tokens,
-        };
-
-        const response = await admin.messaging().sendMulticast(message);
-        return res.status(200).send(`✅ Ειδοποιήσεις εστάλησαν: ${response.successCount} επιτυχίες`);
-    } catch (error) {
-        console.error("❌ Σφάλμα:", error);
-        return res.status(500).send("❌ Σφάλμα αποστολής");
+    if (!token || !title || !body) {
+        return res.status(400).json({ error: 'Missing title, body or token' });
     }
+
+    const message = {
+        notification: {
+            title,
+            body,
+        },
+        token,
+    };
+
+    try {
+        const response = await admin.messaging().send(message);
+        res.json({ success: true, response });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Ξεκίνα τον server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`✅ Server listening on port ${PORT}`);
 });
