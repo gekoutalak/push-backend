@@ -4,13 +4,15 @@ const admin = require("firebase-admin");
 const { google } = require("googleapis");
 const fetch = require("node-fetch");
 const app = express();
-const port = process.env.PORT || 3000; // Προσοχή: χρήση του process.env.PORT για Render!
+const port = process.env.PORT || 3000;
 
-const serviceAccount = require("./serviceAccountKey.json");
+// 🚀 Ανάγνωση του serviceAccount από Environment Variable
+const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
 });
+
 
 app.use(bodyParser.json());
 
