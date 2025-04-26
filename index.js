@@ -1,48 +1,89 @@
-﻿const express = require('express');
-const admin = require('firebase-admin');
-const bodyParser = require('body-parser');
-
+﻿const express = require("express");
+const bodyParser = require("body-parser");
+const admin = require("firebase-admin");
+const { google } = require("googleapis");
+const fetch = require("node-fetch");
 const app = express();
-app.use(bodyParser.json());
+const port = process.env.PORT || 3000; // Προσοχή: χρήση του process.env.PORT για Render!
 
-// Ανέβασε εδώ το δικό σου Firebase serviceAccountKey.json
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT);
+const serviceAccount = require("./serviceAccountKey.json");
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
 });
 
-// Ρίζα για δοκιμή
-app.get('/', (req, res) => {
-    res.send('Backend is working ✅');
-});
+app.use(bodyParser.json());
 
-// Route για αποστολή push notification
-app.post('/sendNotification', async (req, res) => {
-    const { title, body, token } = req.body;
+async function getAccessToken() {
+    const SCOPES = ["https://www.googleapis.com/auth/firebase.messaging"];
+    const jwtClient = new google.auth.JWT(
+        serviceAccount.client_email,
+        null,
+        serviceAccount.private_key,
+        SCOPES
+    );
+    const tokens = await jwtClient.authorize();
+    return tokens.access_token;
+}
 
-    if (!token || !title || !body) {
-        return res.status(400).json({ error: 'Missing title, body or token' });
+app.post("/send-notification", async (req, res) => {
+    const { title, body, roles } = req.body;
+
+    if (!title || !body || !roles || !Array.isArray(roles)) {
+        return res.status(400).json({ error: "Λείπουν πεδία ή λάθος μορφή." });
     }
-
-    const message = {
-        notification: {
-            title,
-            body,
-        },
-        token,
-    };
 
     try {
-        const response = await admin.messaging().send(message);
-        res.json({ success: true, response });
+        const accessToken = await getAccessToken();
+
+        const tokensSnapshot = await admin.firestore().collection("deviceTokens").get();
+        const usersRef = admin.firestore().collection("users");
+
+        const sendPromises = [];
+
+        for (const doc of tokensSnapshot.docs) {
+            const token = doc.data().token;
+            const userId = doc.id;
+
+            const userDoc = await usersRef.doc(userId).get();
+            const userRole = userDoc.data()?.role;
+
+            if (roles.includes(userRole)) {
+                const message = {
+                    message: {
+                        notification: {
+                            title,
+                            body,
+                        },
+                        token: token,
+                    },
+                };
+
+                const response = await fetch(
+                    `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`,
+                    {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${accessToken}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(message),
+                    }
+                );
+
+                const result = await response.json();
+                console.log(`✅ Εστάλη στον ${userRole}:`, result);
+                sendPromises.push(result);
+            }
+        }
+
+        res.json({ success: true, count: sendPromises.length });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("❌ Σφάλμα αποστολής:", error);
+        res.status(500).json({ error: "Αποτυχία αποστολής" });
     }
 });
 
-// Ξεκίνα τον server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`✅ Server listening on port ${PORT}`);
+app.listen(port, () => {
+    console.log(`🚀 Backend FCM v1 τρέχει στο http://localhost:${port}`);
 });
