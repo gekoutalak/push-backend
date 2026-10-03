@@ -10,7 +10,89 @@ const app = express();
 // Αν τρέχει τοπικά, χρησιμοποιούμε 10000.
 const PORT = process.env.PORT || 10000;
 
-// 🚀 Ανάγνωση του serviceAccount από Environment Variable
+// =====================================================
+// CORS
+// =====================================================
+
+// Επιτρεπόμενα Web origins
+const allowedOrigins = [
+    "https://apsionikoskarlovasiou-fecff.web.app",
+    "https://apsionikoskarlovasiou-fecff.firebaseapp.com",
+];
+
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+
+    let isAllowed = false;
+
+    // Native Android / iPhone requests συνήθως δεν έχουν Origin
+    if (!origin) {
+        isAllowed = true;
+    }
+
+    // Firebase Hosting
+    if (origin && allowedOrigins.includes(origin)) {
+        isAllowed = true;
+    }
+
+    // Flutter Web τοπικά
+    if (
+        origin &&
+        (
+            origin.startsWith("http://localhost:") ||
+            origin.startsWith("http://127.0.0.1:")
+        )
+    ) {
+        isAllowed = true;
+    }
+
+    if (isAllowed && origin) {
+        res.setHeader(
+            "Access-Control-Allow-Origin",
+            origin
+        );
+
+        res.setHeader(
+            "Vary",
+            "Origin"
+        );
+    }
+
+    res.setHeader(
+        "Access-Control-Allow-Headers",
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+    );
+
+    res.setHeader(
+        "Access-Control-Allow-Methods",
+        "GET, POST, OPTIONS"
+    );
+
+    // Απάντηση στα browser preflight requests
+    if (req.method === "OPTIONS") {
+        if (isAllowed) {
+            return res.sendStatus(204);
+        }
+
+        return res.status(403).json({
+            error: "Origin not allowed",
+        });
+    }
+
+    next();
+});
+
+// =====================================================
+// JSON BODY
+// =====================================================
+
+app.use(bodyParser.json());
+
+// =====================================================
+// FIREBASE SERVICE ACCOUNT
+// =====================================================
+
+// Ανάγνωση του serviceAccount από Environment Variable
 const serviceAccount = JSON.parse(
     process.env.SERVICE_ACCOUNT_KEY
 );
@@ -18,8 +100,6 @@ const serviceAccount = JSON.parse(
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
 });
-
-app.use(bodyParser.json());
 
 // =====================================================
 // WAKE / HEALTH CHECK
@@ -33,7 +113,7 @@ app.get("/", (req, res) => {
     });
 });
 
-// Προαιρετικό health check για Render
+// Health check για Render
 app.get("/health", (req, res) => {
     res.status(200).json({
         status: "ok",
@@ -141,12 +221,15 @@ app.post(
                             `https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`,
                             {
                                 method: "POST",
+
                                 headers: {
                                     Authorization:
                                         `Bearer ${accessToken}`,
+
                                     "Content-Type":
                                         "application/json",
                                 },
+
                                 body:
                                     JSON.stringify(
                                         message
