@@ -194,10 +194,314 @@ function normalizeRole(role) {
         case "admin":
             return "admin";
 
+        case "επισκέπτης":
+        case "visitor":
+            return "visitor";
+
         default:
             return value;
     }
 }
+
+// ============================================================
+// 🔐 ADMIN AUTHORIZATION
+// ============================================================
+
+async function requireAdmin(req, res, next) {
+    try {
+        const authHeader =
+            req.headers.authorization || "";
+
+        if (
+            !authHeader.startsWith("Bearer ")
+        ) {
+            return res
+                .status(401)
+                .json({
+                    success: false,
+                    error:
+                        "Δεν υπάρχει έγκυρο Authorization token.",
+                });
+        }
+
+        const idToken =
+            authHeader
+                .substring(7)
+                .trim();
+
+        if (!idToken) {
+            return res
+                .status(401)
+                .json({
+                    success: false,
+                    error:
+                        "Λείπει το Firebase ID token.",
+                });
+        }
+
+        const decodedToken =
+            await admin
+                .auth()
+                .verifyIdToken(idToken);
+
+        const requesterUid =
+            decodedToken.uid;
+
+        const requesterDoc =
+            await db
+                .collection("users")
+                .doc(requesterUid)
+                .get();
+
+        if (!requesterDoc.exists) {
+            return res
+                .status(403)
+                .json({
+                    success: false,
+                    error:
+                        "Δεν βρέθηκε προφίλ διαχειριστή.",
+                });
+        }
+
+        const requesterData =
+            requesterDoc.data() || {};
+
+        const requesterRole =
+            normalizeRole(
+                requesterData.normalizedRole ||
+                requesterData.role
+            );
+
+        if (requesterRole !== "admin") {
+            return res
+                .status(403)
+                .json({
+                    success: false,
+                    error:
+                        "Η ενέργεια επιτρέπεται μόνο σε Διαχειριστή.",
+                });
+        }
+
+        req.requesterUid =
+            requesterUid;
+
+        next();
+    } catch (error) {
+        console.error(
+            "❌ Σφάλμα ελέγχου διαχειριστή:",
+            error
+        );
+
+        return res
+            .status(401)
+            .json({
+                success: false,
+                error:
+                    "Μη έγκυρη ή ληγμένη σύνδεση.",
+                details:
+                    error.message,
+            });
+    }
+}
+
+// ============================================================
+// 🗑️ DELETE USER
+// ============================================================
+
+app.post(
+    "/delete-user",
+    requireAdmin,
+    async (req, res) => {
+        try {
+            const targetUid =
+                (req.body?.uid || "")
+                    .toString()
+                    .trim();
+
+            if (!targetUid) {
+                return res
+                    .status(400)
+                    .json({
+                        success: false,
+                        error:
+                            "Λείπει το uid του χρήστη.",
+                    });
+            }
+
+            // Δεν επιτρέπουμε στον διαχειριστή
+            // να διαγράψει τον δικό του λογαριασμό.
+            if (
+                targetUid ===
+                req.requesterUid
+            ) {
+                return res
+                    .status(403)
+                    .json({
+                        success: false,
+                        error:
+                            "Δεν μπορείτε να διαγράψετε τον δικό σας λογαριασμό.",
+                    });
+            }
+
+            const userRef =
+                db
+                    .collection("users")
+                    .doc(targetUid);
+
+            const targetDoc =
+                await userRef.get();
+
+            if (!targetDoc.exists) {
+                return res
+                    .status(404)
+                    .json({
+                        success: false,
+                        error:
+                            "Ο χρήστης δεν βρέθηκε στο Firestore.",
+                    });
+            }
+
+            const targetData =
+                targetDoc.data() || {};
+
+            const firstName =
+                (targetData.firstName || "")
+                    .toString()
+                    .trim();
+
+            const lastName =
+                (targetData.lastName || "")
+                    .toString()
+                    .trim();
+
+            const fullName =
+                `${firstName} ${lastName}`
+                    .trim();
+
+            const targetRole =
+                normalizeRole(
+                    targetData.normalizedRole ||
+                    targetData.role
+                );
+
+            console.log(
+                "========================================"
+            );
+
+            console.log(
+                "🗑️ Διαγραφή χρήστη"
+            );
+
+            console.log(
+                "Από:",
+                req.requesterUid
+            );
+
+            console.log(
+                "Χρήστης:",
+                targetUid
+            );
+
+            console.log(
+                "Όνομα:",
+                fullName || "-"
+            );
+
+            console.log(
+                "Ρόλος:",
+                targetRole || "-"
+            );
+
+            // =================================================
+            // FIREBASE AUTHENTICATION
+            // =================================================
+
+            try {
+                await admin
+                    .auth()
+                    .deleteUser(
+                        targetUid
+                    );
+
+                console.log(
+                    "✅ Διαγράφηκε από Firebase Authentication"
+                );
+            } catch (authError) {
+                // Αν ο λογαριασμός έχει ήδη διαγραφεί
+                // από το Authentication, συνεχίζουμε
+                // ώστε να καθαρίσουμε το Firestore.
+                if (
+                    authError.code ===
+                    "auth/user-not-found"
+                ) {
+                    console.log(
+                        "⚠️ Δεν υπήρχε πλέον στο Firebase Authentication"
+                    );
+                } else {
+                    throw authError;
+                }
+            }
+
+            // =================================================
+            // FIRESTORE
+            // =================================================
+
+            const batch =
+                db.batch();
+
+            batch.delete(
+                userRef
+            );
+
+            batch.delete(
+                db
+                    .collection(
+                        "deviceTokens"
+                    )
+                    .doc(targetUid)
+            );
+
+            await batch.commit();
+
+            console.log(
+                "✅ Διαγράφηκε από users και deviceTokens"
+            );
+
+            console.log(
+                "========================================"
+            );
+
+            return res
+                .status(200)
+                .json({
+                    success: true,
+                    message:
+                        "Ο χρήστης διαγράφηκε επιτυχώς.",
+                    uid:
+                        targetUid,
+                    name:
+                        fullName,
+                    role:
+                        targetRole,
+                });
+        } catch (error) {
+            console.error(
+                "❌ Σφάλμα διαγραφής χρήστη:",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    success: false,
+                    error:
+                        "Αποτυχία διαγραφής χρήστη.",
+                    details:
+                        error.message,
+                });
+        }
+    }
+);
 
 // ============================================================
 // 📱💻 GET ALL DEVICE TOKENS
