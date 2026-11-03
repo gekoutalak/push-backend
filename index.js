@@ -26,7 +26,7 @@ app.use((req, res, next) => {
 
     let isAllowed = false;
 
-    // Android / native requests συνήθως δεν έχουν Origin.
+    // Android / native requests normally do not have Origin.
     if (!origin) {
         isAllowed = true;
     }
@@ -39,7 +39,7 @@ app.use((req, res, next) => {
         isAllowed = true;
     }
 
-    // Local Flutter Web.
+    // Local Flutter Web testing.
     if (
         origin &&
         (
@@ -75,6 +75,7 @@ app.use((req, res, next) => {
         "GET, POST, OPTIONS"
     );
 
+    // Browser preflight.
     if (req.method === "OPTIONS") {
         if (isAllowed) {
             return res.sendStatus(204);
@@ -132,10 +133,31 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
     res.status(200).json({
-        success: true,
         status: "ok",
     });
 });
+
+// ============================================================
+// 🔑 FIREBASE ACCESS TOKEN
+// ============================================================
+
+async function getAccessToken() {
+    const SCOPES = [
+        "https://www.googleapis.com/auth/firebase.messaging",
+    ];
+
+    const jwtClient = new google.auth.JWT(
+        serviceAccount.client_email,
+        null,
+        serviceAccount.private_key,
+        SCOPES
+    );
+
+    const tokens =
+        await jwtClient.authorize();
+
+    return tokens.access_token;
+}
 
 // ============================================================
 // 👤 NORMALIZE ROLE
@@ -172,100 +194,9 @@ function normalizeRole(role) {
         case "admin":
             return "admin";
 
-        case "επισκέπτης":
-        case "visitor":
-            return "visitor";
-
         default:
             return value;
     }
-}
-
-// ============================================================
-// 🏐 NORMALIZE CATEGORY
-// ============================================================
-
-function normalizeCategory(category) {
-    if (!category) {
-        return "";
-    }
-
-    return category
-        .toString()
-        .trim()
-        .toLocaleLowerCase("el-GR");
-}
-
-// ============================================================
-// 🏐 GET ALL USER CATEGORIES
-// ============================================================
-
-function getUserCategories(userData) {
-    const categorySet = new Set();
-
-    function addCategory(value) {
-        const normalized =
-            normalizeCategory(value);
-
-        if (normalized) {
-            categorySet.add(
-                normalized
-            );
-        }
-    }
-
-    // Πολλαπλές κατηγορίες
-    if (
-        Array.isArray(
-            userData.categories
-        )
-    ) {
-        for (
-            const category
-            of userData.categories
-        ) {
-            addCategory(
-                category
-            );
-        }
-    }
-
-    // Νέο βασικό πεδίο
-    addCategory(
-        userData.mainCategory
-    );
-
-    // Παλιό πεδίο
-    addCategory(
-        userData.category
-    );
-
-    return Array.from(
-        categorySet
-    );
-}
-
-// ============================================================
-// 🔑 FIREBASE ACCESS TOKEN
-// ============================================================
-
-async function getAccessToken() {
-    const SCOPES = [
-        "https://www.googleapis.com/auth/firebase.messaging",
-    ];
-
-    const jwtClient =
-        new google.auth.JWT(
-            serviceAccount.client_email,
-            null,
-            serviceAccount.private_key,
-            SCOPES
-        );
-
-    const tokens =
-        await jwtClient.authorize();
-
-    return tokens.access_token;
 }
 
 // ============================================================
@@ -273,8 +204,7 @@ async function getAccessToken() {
 // ============================================================
 
 function getAllDeviceTokens(data) {
-    const tokenSet =
-        new Set();
+    const tokenSet = new Set();
 
     function addToken(token) {
         if (
@@ -297,12 +227,12 @@ function getAllDeviceTokens(data) {
         }
     }
 
-    // Legacy
+    // Legacy token.
     addToken(
         data.token
     );
 
-    // Current platform tokens
+    // Current token per platform.
     addToken(
         data.webToken
     );
@@ -311,7 +241,7 @@ function getAllDeviceTokens(data) {
         data.androidToken
     );
 
-    // Token lists
+    // All known tokens.
     addTokenArray(
         data.tokens
     );
@@ -324,6 +254,7 @@ function getAllDeviceTokens(data) {
         data.androidTokens
     );
 
+    // Set removes duplicates automatically.
     return Array.from(
         tokenSet
     );
@@ -348,17 +279,17 @@ async function sendFcmMessage({
 
             token,
 
-            // ==================================================
+            // ================================================
             // ANDROID
-            // ==================================================
+            // ================================================
 
             android: {
                 priority: "high",
             },
 
-            // ==================================================
-            // WEB / iPHONE PWA
-            // ==================================================
+            // ================================================
+            // WEB
+            // ================================================
 
             webpush: {
                 headers: {
@@ -413,265 +344,6 @@ async function sendFcmMessage({
 }
 
 // ============================================================
-// 🔐 REQUIRE ADMIN
-// ============================================================
-
-async function requireAdmin(
-    req,
-    res,
-    next
-) {
-    try {
-        const authorization =
-            req.headers.authorization || "";
-
-        if (
-            !authorization.startsWith(
-                "Bearer "
-            )
-        ) {
-            return res
-                .status(401)
-                .json({
-                    success: false,
-                    error:
-                        "Λείπει Firebase ID token.",
-                });
-        }
-
-        const idToken =
-            authorization
-                .substring(7)
-                .trim();
-
-        if (!idToken) {
-            return res
-                .status(401)
-                .json({
-                    success: false,
-                    error:
-                        "Κενό Firebase ID token.",
-                });
-        }
-
-        const decodedToken =
-            await admin.auth()
-                .verifyIdToken(
-                    idToken
-                );
-
-        const requesterUid =
-            decodedToken.uid;
-
-        const requesterDoc =
-            await db
-                .collection("users")
-                .doc(requesterUid)
-                .get();
-
-        if (!requesterDoc.exists) {
-            return res
-                .status(403)
-                .json({
-                    success: false,
-                    error:
-                        "Δεν βρέθηκε ο χρήστης που κάνει το αίτημα.",
-                });
-        }
-
-        const requesterData =
-            requesterDoc.data() || {};
-
-        const requesterRole =
-            normalizeRole(
-                requesterData.normalizedRole ||
-                requesterData.role
-            );
-
-        if (
-            requesterRole !== "admin"
-        ) {
-            return res
-                .status(403)
-                .json({
-                    success: false,
-                    error:
-                        "Η ενέργεια επιτρέπεται μόνο σε Διαχειριστή.",
-                });
-        }
-
-        req.requesterUid =
-            requesterUid;
-
-        next();
-    } catch (error) {
-        console.error(
-            "❌ requireAdmin error:",
-            error
-        );
-
-        return res
-            .status(401)
-            .json({
-                success: false,
-                error:
-                    "Μη έγκυρη ή ληγμένη σύνδεση.",
-            });
-    }
-}
-
-// ============================================================
-// 🗑️ DELETE USER
-// ============================================================
-
-app.post(
-    "/delete-user",
-    requireAdmin,
-    async (req, res) => {
-        const targetUid =
-            req.body?.uid
-                ?.toString()
-                .trim();
-
-        if (!targetUid) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    error:
-                        "Λείπει το uid του χρήστη.",
-                });
-        }
-
-        if (
-            targetUid ===
-            req.requesterUid
-        ) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    error:
-                        "Δεν μπορείς να διαγράψεις τον δικό σου λογαριασμό από εδώ.",
-                });
-        }
-
-        try {
-            const targetDoc =
-                await db
-                    .collection("users")
-                    .doc(targetUid)
-                    .get();
-
-            const targetData =
-                targetDoc.exists
-                    ? targetDoc.data() || {}
-                    : {};
-
-            console.log(
-                "========================================"
-            );
-
-            console.log(
-                "🗑️ Διαγραφή χρήστη"
-            );
-
-            console.log(
-                "Requester UID:",
-                req.requesterUid
-            );
-
-            console.log(
-                "Target UID:",
-                targetUid
-            );
-
-            console.log(
-                "Target name:",
-                `${targetData.firstName || ""} ${targetData.lastName || ""}`.trim()
-            );
-
-            console.log(
-                "Role:",
-                targetData.role || ""
-            );
-
-            // ==================================================
-            // DELETE FROM FIREBASE AUTH
-            // ==================================================
-
-            try {
-                await admin.auth()
-                    .deleteUser(
-                        targetUid
-                    );
-
-                console.log(
-                    "✅ Διαγράφηκε από Firebase Authentication"
-                );
-            } catch (authError) {
-                if (
-                    authError.code !==
-                    "auth/user-not-found"
-                ) {
-                    throw authError;
-                }
-
-                console.log(
-                    "⚠️ Δεν υπήρχε πλέον στο Firebase Authentication"
-                );
-            }
-
-            // ==================================================
-            // DELETE FIRESTORE USER + TOKENS
-            // ==================================================
-
-            const batch =
-                db.batch();
-
-            batch.delete(
-                db.collection("users")
-                    .doc(targetUid)
-            );
-
-            batch.delete(
-                db.collection("deviceTokens")
-                    .doc(targetUid)
-            );
-
-            await batch.commit();
-
-            console.log(
-                "✅ Διαγράφηκε από users και deviceTokens"
-            );
-
-            return res.json({
-                success: true,
-                message:
-                    "Ο χρήστης διαγράφηκε.",
-            });
-        } catch (error) {
-            console.error(
-                "❌ Delete user error:",
-                error
-            );
-
-            return res
-                .status(500)
-                .json({
-                    success: false,
-
-                    error:
-                        "Αποτυχία διαγραφής χρήστη.",
-
-                    details:
-                        error.message,
-                });
-        }
-    }
-);
-
-// ============================================================
 // 🔔 SEND PUSH NOTIFICATION
 // ============================================================
 
@@ -682,7 +354,6 @@ app.post(
             title,
             body,
             roles,
-            categories,
         } = req.body;
 
         // ====================================================
@@ -705,19 +376,6 @@ app.post(
                 });
         }
 
-        if (
-            categories != null &&
-            !Array.isArray(categories)
-        ) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
-                    error:
-                        "Το categories πρέπει να είναι λίστα.",
-                });
-        }
-
         try {
             console.log(
                 "========================================"
@@ -735,11 +393,6 @@ app.post(
             console.log(
                 "Ρόλοι:",
                 roles
-            );
-
-            console.log(
-                "Κατηγορίες αθλητριών:",
-                categories || []
             );
 
             // =================================================
@@ -766,32 +419,13 @@ app.post(
                 );
 
             // =================================================
-            // NORMALIZE ROLES
+            // NORMALIZE SELECTED ROLES
             // =================================================
 
             const normalizedRoles =
-                roles
-                    .map(
-                        normalizeRole
-                    )
-                    .filter(
-                        Boolean
-                    );
-
-            // =================================================
-            // NORMALIZE ATHLETE CATEGORIES
-            // =================================================
-
-            const normalizedCategories =
-                Array.isArray(categories)
-                    ? categories
-                        .map(
-                            normalizeCategory
-                        )
-                        .filter(
-                            Boolean
-                        )
-                    : [];
+                roles.map(
+                    normalizeRole
+                );
 
             // =================================================
             // COUNTERS
@@ -805,7 +439,7 @@ app.post(
             const errors = [];
 
             // =================================================
-            // LOOP DEVICE TOKENS
+            // LOOP DEVICE TOKEN DOCUMENTS
             // =================================================
 
             for (
@@ -819,7 +453,7 @@ app.post(
                     tokenDoc.data();
 
                 // =============================================
-                // GET USER
+                // USER DATA
                 // =============================================
 
                 const userDoc =
@@ -859,56 +493,10 @@ app.post(
                     continue;
                 }
 
-                // =============================================
-                // 🏐 ATHLETE CATEGORY FILTER
-                // =============================================
-                //
-                // categories = []:
-                //   Στέλνει σε ΟΛΟΥΣ τους αθλητές.
-                //
-                // categories = ["Κορασίδες"]:
-                //   Στέλνει μόνο στις Κορασίδες.
-                //
-                // categories = ["Κορασίδες", "Νεάνιδες"]:
-                //   Στέλνει και στις δύο κατηγορίες.
-                //
-                // Το φίλτρο εφαρμόζεται ΜΟΝΟ στους Αθλητές.
-                //
-                // Αν μαζί έχουμε π.χ.
-                // Αθλητές + Προπονητές:
-                //
-                // οι αθλητές φιλτράρονται ανά κατηγορία,
-                // οι προπονητές παίρνουν όλοι το Push.
-                // =============================================
-
-                if (
-                    normalizedUserRole ===
-                        "athlete" &&
-                    normalizedCategories.length > 0
-                ) {
-                    const userCategories =
-                        getUserCategories(
-                            userData
-                        );
-
-                    const categoryMatch =
-                        normalizedCategories
-                            .some(
-                                (category) =>
-                                    userCategories.includes(
-                                        category
-                                    )
-                            );
-
-                    if (!categoryMatch) {
-                        continue;
-                    }
-                }
-
                 matchedUsers++;
 
                 // =============================================
-                // GET ALL TOKENS
+                // GET WEB + ANDROID TOKENS
                 // =============================================
 
                 const userTokens =
@@ -929,18 +517,6 @@ app.post(
                 console.log(
                     `👤 ${userRole} - ${userId}`
                 );
-
-                if (
-                    normalizedUserRole ===
-                    "athlete"
-                ) {
-                    console.log(
-                        "🏐 Κατηγορίες:",
-                        getUserCategories(
-                            userData
-                        )
-                    );
-                }
 
                 console.log(
                     `📱💻 Tokens: ${userTokens.length}`
@@ -983,13 +559,10 @@ app.post(
 
                             errors.push({
                                 userId,
-
                                 role:
                                     userRole,
-
                                 status:
                                     sendResult.status,
-
                                 error:
                                     sendResult.result,
                             });
@@ -1004,10 +577,8 @@ app.post(
 
                         errors.push({
                             userId,
-
                             role:
                                 userRole,
-
                             error:
                                 sendError.message,
                         });
@@ -1057,11 +628,6 @@ app.post(
                 failed:
                     failureCount,
 
-                roles,
-
-                categories:
-                    categories || [],
-
                 errors,
             });
         } catch (error) {
@@ -1080,6 +646,501 @@ app.post(
 
                     details:
                         error.message,
+                });
+        }
+    }
+);
+
+// ============================================================
+// 🔐 VERIFY STAFF CALLER
+// ============================================================
+
+async function verifyStaffCaller(req) {
+    const authorization =
+        req.headers.authorization || "";
+
+    if (
+        !authorization.startsWith(
+            "Bearer "
+        )
+    ) {
+        const error =
+            new Error(
+                "Missing Firebase ID token"
+            );
+
+        error.statusCode =
+            401;
+
+        throw error;
+    }
+
+    const idToken =
+        authorization
+            .substring(
+                "Bearer ".length
+            )
+            .trim();
+
+    if (!idToken) {
+        const error =
+            new Error(
+                "Missing Firebase ID token"
+            );
+
+        error.statusCode =
+            401;
+
+        throw error;
+    }
+
+    const decodedToken =
+        await admin.auth()
+            .verifyIdToken(
+                idToken
+            );
+
+    const callerDoc =
+        await db.collection(
+            "users"
+        )
+            .doc(
+                decodedToken.uid
+            )
+            .get();
+
+    if (!callerDoc.exists) {
+        const error =
+            new Error(
+                "Caller user document not found"
+            );
+
+        error.statusCode =
+            403;
+
+        throw error;
+    }
+
+    const callerData =
+        callerDoc.data() || {};
+
+    const callerRole =
+        normalizeRole(
+            callerData.normalizedRole ||
+            callerData.role ||
+            ""
+        );
+
+    if (
+        callerRole !== "admin" &&
+        callerRole !== "eforos"
+    ) {
+        const error =
+            new Error(
+                "Not allowed"
+            );
+
+        error.statusCode =
+            403;
+
+        throw error;
+    }
+
+    return {
+        uid:
+            decodedToken.uid,
+
+        email:
+            decodedToken.email || "",
+
+        role:
+            callerRole,
+    };
+}
+
+// ============================================================
+// 🎯 SEND PUSH TO SPECIFIC USERS
+// ============================================================
+
+app.post(
+    "/send-notification-users",
+    async (req, res) => {
+        try {
+            const caller =
+                await verifyStaffCaller(
+                    req
+                );
+
+            const {
+                title,
+                body,
+                userIds,
+            } = req.body || {};
+
+            if (
+                typeof title !== "string" ||
+                title.trim().length === 0 ||
+                typeof body !== "string" ||
+                body.trim().length === 0 ||
+                !Array.isArray(
+                    userIds
+                ) ||
+                userIds.length === 0
+            ) {
+                return res
+                    .status(400)
+                    .json({
+                        success:
+                            false,
+
+                        error:
+                            "Λείπουν τίτλος, μήνυμα ή παραλήπτες.",
+                    });
+            }
+
+            // Αφαιρούμε κενά, διπλότυπα
+            // και περιορίζουμε το μέγεθος ενός request.
+            const uniqueUserIds =
+                Array.from(
+                    new Set(
+                        userIds
+                            .map(
+                                (value) =>
+                                    typeof value ===
+                                    "string"
+                                        ? value.trim()
+                                        : ""
+                            )
+                            .filter(
+                                (value) =>
+                                    value.length >
+                                    0
+                            )
+                    )
+                );
+
+            if (
+                uniqueUserIds.length ===
+                0
+            ) {
+                return res
+                    .status(400)
+                    .json({
+                        success:
+                            false,
+
+                        error:
+                            "Δεν υπάρχουν έγκυροι παραλήπτες.",
+                    });
+            }
+
+            if (
+                uniqueUserIds.length >
+                300
+            ) {
+                return res
+                    .status(400)
+                    .json({
+                        success:
+                            false,
+
+                        error:
+                            "Πάρα πολλοί παραλήπτες σε μία αποστολή.",
+                    });
+            }
+
+            const accessToken =
+                await getAccessToken();
+
+            let matchedUsers =
+                0;
+
+            let usersWithTokens =
+                0;
+
+            let totalTokens =
+                0;
+
+            let successCount =
+                0;
+
+            let failureCount =
+                0;
+
+            const skippedUsers =
+                [];
+
+            const errors =
+                [];
+
+            for (
+                const userId
+                of uniqueUserIds
+            ) {
+                try {
+                    const userDoc =
+                        await db
+                            .collection(
+                                "users"
+                            )
+                            .doc(
+                                userId
+                            )
+                            .get();
+
+                    if (
+                        !userDoc.exists
+                    ) {
+                        skippedUsers.push({
+                            userId,
+                            reason:
+                                "user_not_found",
+                        });
+
+                        continue;
+                    }
+
+                    const userData =
+                        userDoc.data() ||
+                        {};
+
+                    const status =
+                        (
+                            userData.status ||
+                            ""
+                        )
+                            .toString()
+                            .trim()
+                            .toLowerCase();
+
+                    const normalizedRole =
+                        normalizeRole(
+                            userData.normalizedRole ||
+                            userData.role ||
+                            ""
+                        );
+
+                    // Δεν στέλνουμε ποτέ
+                    // σε pending/rejected χρήστες.
+                    if (
+                        status ===
+                            "pending" ||
+                        status ===
+                            "rejected" ||
+                        normalizedRole ===
+                            "pending"
+                    ) {
+                        skippedUsers.push({
+                            userId,
+                            reason:
+                                "inactive_user",
+                        });
+
+                        continue;
+                    }
+
+                    // Η λειτουργία οφειλών
+                    // αφορά μόνο Γονείς/Αθλητές.
+                    if (
+                        normalizedRole !==
+                            "parent" &&
+                        normalizedRole !==
+                            "athlete"
+                    ) {
+                        skippedUsers.push({
+                            userId,
+                            reason:
+                                "unsupported_role",
+                        });
+
+                        continue;
+                    }
+
+                    matchedUsers++;
+
+                    const tokenDoc =
+                        await db
+                            .collection(
+                                "deviceTokens"
+                            )
+                            .doc(
+                                userId
+                            )
+                            .get();
+
+                    if (
+                        !tokenDoc.exists
+                    ) {
+                        skippedUsers.push({
+                            userId,
+                            reason:
+                                "no_token_document",
+                        });
+
+                        continue;
+                    }
+
+                    const userTokens =
+                        getAllDeviceTokens(
+                            tokenDoc.data() ||
+                            {}
+                        );
+
+                    if (
+                        userTokens.length ===
+                        0
+                    ) {
+                        skippedUsers.push({
+                            userId,
+                            reason:
+                                "no_tokens",
+                        });
+
+                        continue;
+                    }
+
+                    usersWithTokens++;
+
+                    for (
+                        const token
+                        of userTokens
+                    ) {
+                        totalTokens++;
+
+                        try {
+                            const sendResult =
+                                await sendFcmMessage({
+                                    accessToken,
+                                    token,
+                                    title:
+                                        title.trim(),
+                                    body:
+                                        body.trim(),
+                                });
+
+                            if (
+                                sendResult.ok
+                            ) {
+                                successCount++;
+                            } else {
+                                failureCount++;
+
+                                errors.push({
+                                    userId,
+                                    status:
+                                        sendResult.status,
+                                    error:
+                                        sendResult.result,
+                                });
+                            }
+                        } catch (
+                            sendError
+                        ) {
+                            failureCount++;
+
+                            errors.push({
+                                userId,
+                                error:
+                                    sendError.message,
+                            });
+                        }
+                    }
+                } catch (
+                    userError
+                ) {
+                    failureCount++;
+
+                    errors.push({
+                        userId,
+                        error:
+                            userError.message,
+                    });
+                }
+            }
+
+            console.log(
+                "========================================"
+            );
+
+            console.log(
+                "💳 Στοχευμένη ειδοποίηση οφειλών"
+            );
+
+            console.log(
+                "Αποστολέας:",
+                caller.uid,
+                caller.role
+            );
+
+            console.log(
+                `Παραλήπτες request: ${uniqueUserIds.length}`
+            );
+
+            console.log(
+                `Χρήστες που ταίριαξαν: ${matchedUsers}`
+            );
+
+            console.log(
+                `Χρήστες με tokens: ${usersWithTokens}`
+            );
+
+            console.log(
+                `Tokens: ${totalTokens}`
+            );
+
+            console.log(
+                `Επιτυχίες: ${successCount}`
+            );
+
+            console.log(
+                `Αποτυχίες: ${failureCount}`
+            );
+
+            console.log(
+                "========================================"
+            );
+
+            return res.json({
+                success:
+                    failureCount === 0,
+
+                requestedUsers:
+                    uniqueUserIds.length,
+
+                matchedUsers,
+
+                usersWithTokens,
+
+                totalTokens,
+
+                sent:
+                    successCount,
+
+                failed:
+                    failureCount,
+
+                skippedUsers,
+
+                errors,
+            });
+        } catch (error) {
+            console.error(
+                "❌ Σφάλμα στοχευμένης αποστολής:",
+                error
+            );
+
+            return res
+                .status(
+                    error.statusCode ||
+                    500
+                )
+                .json({
+                    success:
+                        false,
+
+                    error:
+                        error.message ||
+                        "Αποτυχία αποστολής",
                 });
         }
     }
