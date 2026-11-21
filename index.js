@@ -7,13 +7,20 @@ const fetch = require("node-fetch");
 const app = express();
 
 // ============================================================
-// 🚀 RENDER PORT
+// ΏθγΑ RENDER PORT
 // ============================================================
 
 const PORT = process.env.PORT || 10000;
 
 // ============================================================
-// 🌐 CORS
+// 🌐 WEB APP
+// ============================================================
+
+const WEB_APP_URL =
+    "https://apsionikoskarlovasiou-fecff.web.app";
+
+// ============================================================
+// ΏθΝΡ CORS
 // ============================================================
 
 const allowedOrigins = [
@@ -26,7 +33,7 @@ app.use((req, res, next) => {
 
     let isAllowed = false;
 
-    // Android / native requests συνήθως δεν έχουν Origin.
+    // Android / native requests ╧Δ╧Ζ╬╜╬χ╬╕╧Κ╧Γ ╬┤╬╡╬╜ ╬φ╧Θ╬┐╧Ζ╬╜ Origin.
     if (!origin) {
         isAllowed = true;
     }
@@ -90,7 +97,7 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// 📦 JSON BODY
+// ΏθΥο JSON BODY
 // ============================================================
 
 app.use(
@@ -100,12 +107,12 @@ app.use(
 );
 
 // ============================================================
-// 🔥 FIREBASE SERVICE ACCOUNT
+// ΏθΦξ FIREBASE SERVICE ACCOUNT
 // ============================================================
 
 if (!process.env.SERVICE_ACCOUNT_KEY) {
     throw new Error(
-        "Λείπει το Environment Variable SERVICE_ACCOUNT_KEY"
+        "╬δ╬╡╬ψ╧Α╬╡╬╣ ╧Ε╬┐ Environment Variable SERVICE_ACCOUNT_KEY"
     );
 }
 
@@ -122,7 +129,7 @@ admin.initializeApp({
 const db = admin.firestore();
 
 // ============================================================
-// ❤️ WAKE / HEALTH CHECK
+// έζνΎ╕Π WAKE / HEALTH CHECK
 // ============================================================
 
 app.get("/", (req, res) => {
@@ -141,7 +148,7 @@ app.get("/health", (req, res) => {
 });
 
 // ============================================================
-// 👤 NORMALIZE ROLE
+// ΏθΣν NORMALIZE ROLE
 // ============================================================
 
 function normalizeRole(role) {
@@ -155,28 +162,28 @@ function normalizeRole(role) {
         .toLowerCase();
 
     switch (value) {
-        case "αθλητής":
-        case "αθλήτρια":
+        case "╬▒╬╕╬╗╬╖╧Ε╬χ╧Γ":
+        case "╬▒╬╕╬╗╬χ╧Ε╧Β╬╣╬▒":
         case "athlete":
             return "athlete";
 
-        case "γονέας":
+        case "╬│╬┐╬╜╬φ╬▒╧Γ":
         case "parent":
             return "parent";
 
-        case "προπονητής":
+        case "╧Α╧Β╬┐╧Α╬┐╬╜╬╖╧Ε╬χ╧Γ":
         case "coach":
             return "coach";
 
-        case "έφορος":
+        case "╬φ╧Η╬┐╧Β╬┐╧Γ":
         case "eforos":
             return "eforos";
 
-        case "διαχειριστής":
+        case "╬┤╬╣╬▒╧Θ╬╡╬╣╧Β╬╣╧Δ╧Ε╬χ╧Γ":
         case "admin":
             return "admin";
 
-        case "επισκέπτης":
+        case "╬╡╧Α╬╣╧Δ╬║╬φ╧Α╧Ε╬╖╧Γ":
         case "visitor":
         case "guest":
             return "visitor";
@@ -190,7 +197,7 @@ function normalizeRole(role) {
 }
 
 // ============================================================
-// 🏐 USER CATEGORIES
+// ΏθΠΡ USER CATEGORIES
 // ============================================================
 
 function getUserCategories(userData) {
@@ -235,7 +242,7 @@ function getUserCategories(userData) {
 }
 
 // ============================================================
-// 🔑 FIREBASE ACCESS TOKEN FOR FCM
+// ΏθΦΣ FIREBASE ACCESS TOKEN FOR FCM
 // ============================================================
 
 async function getAccessToken() {
@@ -258,7 +265,7 @@ async function getAccessToken() {
 }
 
 // ============================================================
-// 📱💻 GET ALL DEVICE TOKENS
+// ΏθΥ▒ΏθΤ╗ GET ALL DEVICE TOKENS
 // ============================================================
 
 function getAllDeviceTokens(data) {
@@ -285,14 +292,14 @@ function getAllDeviceTokens(data) {
         }
     }
 
-    // Παλιό token.
+    // ╬ι╬▒╬╗╬╣╧Ν token.
     addToken(data.token);
 
-    // Τρέχον token ανά πλατφόρμα.
+    // ╬ν╧Β╬φ╧Θ╬┐╬╜ token ╬▒╬╜╬υ ╧Α╬╗╬▒╧Ε╧Η╧Ν╧Β╬╝╬▒.
     addToken(data.webToken);
     addToken(data.androidToken);
 
-    // Πολλαπλά tokens.
+    // ╬ι╬┐╬╗╬╗╬▒╧Α╬╗╬υ tokens.
     addTokenArray(data.tokens);
     addTokenArray(data.webTokens);
     addTokenArray(data.androidTokens);
@@ -301,7 +308,45 @@ function getAllDeviceTokens(data) {
 }
 
 // ============================================================
-// 📤 SEND ONE FCM MESSAGE
+// 🌐 WEB NOTIFICATION CLICK LINK
+// ============================================================
+
+function buildWebPushLink(data) {
+    if (
+        !data ||
+        typeof data !== "object" ||
+        Array.isArray(data)
+    ) {
+        return null;
+    }
+
+    const type =
+        (data.type || data.pushType || "")
+            .toString()
+            .trim()
+            .toLowerCase();
+
+    const matchId =
+        (data.matchId || "")
+            .toString()
+            .trim();
+
+    if (
+        type === "match_availability" &&
+        matchId
+    ) {
+        return (
+            `${WEB_APP_URL}/` +
+            `?pushType=match_availability` +
+            `&matchId=${encodeURIComponent(matchId)}`
+        );
+    }
+
+    return null;
+}
+
+// ============================================================
+// ΏθΥν SEND ONE FCM MESSAGE
 // ============================================================
 
 async function sendFcmMessage({
@@ -311,6 +356,9 @@ async function sendFcmMessage({
     body,
     data,
 }) {
+    const webLink =
+        buildWebPushLink(data);
+
     const message = {
         message: {
             notification: {
@@ -332,7 +380,13 @@ async function sendFcmMessage({
         },
     };
 
-    // Προαιρετικά extra data.
+    if (webLink) {
+        message.message.webpush.fcm_options = {
+            link: webLink,
+        };
+    }
+
+    // ╬ι╧Β╬┐╬▒╬╣╧Β╬╡╧Ε╬╣╬║╬υ extra data.
     if (
         data &&
         typeof data === "object" &&
@@ -388,7 +442,7 @@ async function sendFcmMessage({
     } catch (_) {
         result = {
             error:
-                "Δεν ήταν δυνατή η ανάγνωση της απάντησης FCM",
+                "╬Φ╬╡╬╜ ╬χ╧Ε╬▒╬╜ ╬┤╧Ζ╬╜╬▒╧Ε╬χ ╬╖ ╬▒╬╜╬υ╬│╬╜╧Κ╧Δ╬╖ ╧Ε╬╖╧Γ ╬▒╧Α╬υ╬╜╧Ε╬╖╧Δ╬╖╧Γ FCM",
         };
     }
 
@@ -400,7 +454,7 @@ async function sendFcmMessage({
 }
 
 // ============================================================
-// 🔐 VERIFY FIREBASE USER
+// ΏθΦΡ VERIFY FIREBASE USER
 // ============================================================
 
 async function verifyFirebaseUser(
@@ -422,7 +476,7 @@ async function verifyFirebaseUser(
                 .json({
                     success: false,
                     error:
-                        "Δεν υπάρχει έγκυρο token σύνδεσης.",
+                        "╬Φ╬╡╬╜ ╧Ζ╧Α╬υ╧Β╧Θ╬╡╬╣ ╬φ╬│╬║╧Ζ╧Β╬┐ token ╧Δ╧Ξ╬╜╬┤╬╡╧Δ╬╖╧Γ.",
                 });
         }
 
@@ -437,7 +491,7 @@ async function verifyFirebaseUser(
                 .json({
                     success: false,
                     error:
-                        "Κενό token σύνδεσης.",
+                        "╬γ╬╡╬╜╧Ν token ╧Δ╧Ξ╬╜╬┤╬╡╧Δ╬╖╧Γ.",
                 });
         }
 
@@ -463,7 +517,7 @@ async function verifyFirebaseUser(
                 .json({
                     success: false,
                     error:
-                        "Δεν βρέθηκε ο χρήστης στο Firestore.",
+                        "╬Φ╬╡╬╜ ╬▓╧Β╬φ╬╕╬╖╬║╬╡ ╬┐ ╧Θ╧Β╬χ╧Δ╧Ε╬╖╧Γ ╧Δ╧Ε╬┐ Firestore.",
                 });
         }
 
@@ -495,7 +549,7 @@ async function verifyFirebaseUser(
             .json({
                 success: false,
                 error:
-                    "Αποτυχία επιβεβαίωσης χρήστη.",
+                    "╬Σ╧Α╬┐╧Ε╧Ζ╧Θ╬ψ╬▒ ╬╡╧Α╬╣╬▓╬╡╬▓╬▒╬ψ╧Κ╧Δ╬╖╧Γ ╧Θ╧Β╬χ╧Δ╧Ε╬╖.",
                 details:
                     error.message,
             });
@@ -503,7 +557,7 @@ async function verifyFirebaseUser(
 }
 
 // ============================================================
-// 🔐 STAFF ONLY
+// ΏθΦΡ STAFF ONLY
 // ============================================================
 
 async function requireStaff(
@@ -528,7 +582,7 @@ async function requireStaff(
                     .json({
                         success: false,
                         error:
-                            "Η λειτουργία επιτρέπεται μόνο σε Διαχειριστή, Έφορο ή Προπονητή.",
+                            "╬Ω ╬╗╬╡╬╣╧Ε╬┐╧Ζ╧Β╬│╬ψ╬▒ ╬╡╧Α╬╣╧Ε╧Β╬φ╧Α╬╡╧Ε╬▒╬╣ ╬╝╧Ν╬╜╬┐ ╧Δ╬╡ ╬Φ╬╣╬▒╧Θ╬╡╬╣╧Β╬╣╧Δ╧Ε╬χ, ╬Ι╧Η╬┐╧Β╬┐ ╬χ ╬ι╧Β╬┐╧Α╬┐╬╜╬╖╧Ε╬χ.",
                     });
             }
 
@@ -538,7 +592,7 @@ async function requireStaff(
 }
 
 // ============================================================
-// 🔐 ADMIN ONLY
+// ΏθΦΡ ADMIN ONLY
 // ============================================================
 
 async function requireAdmin(
@@ -559,7 +613,7 @@ async function requireAdmin(
                     .json({
                         success: false,
                         error:
-                            "Η λειτουργία επιτρέπεται μόνο στον Διαχειριστή.",
+                            "╬Ω ╬╗╬╡╬╣╧Ε╬┐╧Ζ╧Β╬│╬ψ╬▒ ╬╡╧Α╬╣╧Ε╧Β╬φ╧Α╬╡╧Ε╬▒╬╣ ╬╝╧Ν╬╜╬┐ ╧Δ╧Ε╬┐╬╜ ╬Φ╬╣╬▒╧Θ╬╡╬╣╧Β╬╣╧Δ╧Ε╬χ.",
                     });
             }
 
@@ -569,7 +623,7 @@ async function requireAdmin(
 }
 
 // ============================================================
-// 🔔 SEND PUSH BY ROLE / CATEGORY
+// ΏθΦΦ SEND PUSH BY ROLE / CATEGORY
 // ============================================================
 
 app.post(
@@ -594,7 +648,7 @@ app.post(
                 .json({
                     success: false,
                     error:
-                        "Λείπουν πεδία ή λάθος μορφή.",
+                        "╬δ╬╡╬ψ╧Α╬┐╧Ζ╬╜ ╧Α╬╡╬┤╬ψ╬▒ ╬χ ╬╗╬υ╬╕╬┐╧Γ ╬╝╬┐╧Β╧Η╬χ.",
                 });
         }
 
@@ -604,21 +658,21 @@ app.post(
             );
 
             console.log(
-                "🔔 Νέα Push ειδοποίηση"
+                "ΏθΦΦ ╬ζ╬φ╬▒ Push ╬╡╬╣╬┤╬┐╧Α╬┐╬ψ╬╖╧Δ╬╖"
             );
 
             console.log(
-                "Τίτλος:",
+                "╬ν╬ψ╧Ε╬╗╬┐╧Γ:",
                 title
             );
 
             console.log(
-                "Ρόλοι:",
+                "╬κ╧Ν╬╗╬┐╬╣:",
                 roles
             );
 
             console.log(
-                "Κατηγορίες:",
+                "╬γ╬▒╧Ε╬╖╬│╬┐╧Β╬ψ╬╡╧Γ:",
                 categories || []
             );
 
@@ -696,8 +750,8 @@ app.post(
                     continue;
                 }
 
-                // Αν ζητήθηκαν συγκεκριμένες
-                // κατηγορίες αθλητριών.
+                // ╬Σ╬╜ ╬╢╬╖╧Ε╬χ╬╕╬╖╬║╬▒╬╜ ╧Δ╧Ζ╬│╬║╬╡╬║╧Β╬╣╬╝╬φ╬╜╬╡╧Γ
+                // ╬║╬▒╧Ε╬╖╬│╬┐╧Β╬ψ╬╡╧Γ ╬▒╬╕╬╗╬╖╧Ε╧Β╬╣╧Ο╬╜.
                 if (
                     normalizedUserRole ===
                         "athlete" &&
@@ -813,7 +867,7 @@ app.post(
                 .json({
                     success: false,
                     error:
-                        "Αποτυχία αποστολής ειδοποίησης.",
+                        "╬Σ╧Α╬┐╧Ε╧Ζ╧Θ╬ψ╬▒ ╬▒╧Α╬┐╧Δ╧Ε╬┐╬╗╬χ╧Γ ╬╡╬╣╬┤╬┐╧Α╬┐╬ψ╬╖╧Δ╬╖╧Γ.",
                     details:
                         error.message,
                 });
@@ -822,7 +876,7 @@ app.post(
 );
 
 // ============================================================
-// 🎯 SEND PUSH TO SPECIFIC USERS
+// ΏθΟψ SEND PUSH TO SPECIFIC USERS
 // ============================================================
 
 app.post(
@@ -847,7 +901,7 @@ app.post(
                 .json({
                     success: false,
                     error:
-                        "Λείπουν τίτλος, μήνυμα ή παραλήπτες.",
+                        "╬δ╬╡╬ψ╧Α╬┐╧Ζ╬╜ ╧Ε╬ψ╧Ε╬╗╬┐╧Γ, ╬╝╬χ╬╜╧Ζ╬╝╬▒ ╬χ ╧Α╬▒╧Β╬▒╬╗╬χ╧Α╧Ε╬╡╧Γ.",
                 });
         }
 
@@ -874,7 +928,7 @@ app.post(
                     .json({
                         success: false,
                         error:
-                            "Δεν υπάρχουν έγκυροι παραλήπτες.",
+                            "╬Φ╬╡╬╜ ╧Ζ╧Α╬υ╧Β╧Θ╬┐╧Ζ╬╜ ╬φ╬│╬║╧Ζ╧Β╬┐╬╣ ╧Α╬▒╧Β╬▒╬╗╬χ╧Α╧Ε╬╡╧Γ.",
                     });
             }
 
@@ -903,7 +957,7 @@ app.post(
                     errors.push({
                         userId,
                         error:
-                            "Δεν βρέθηκε user document.",
+                            "╬Φ╬╡╬╜ ╬▓╧Β╬φ╬╕╬╖╬║╬╡ user document.",
                     });
 
                     continue;
@@ -986,36 +1040,36 @@ app.post(
             );
 
             console.log(
-                "🎯 Στοχευμένη ειδοποίηση"
+                "ΏθΟψ ╬μ╧Ε╬┐╧Θ╬╡╧Ζ╬╝╬φ╬╜╬╖ ╬╡╬╣╬┤╬┐╧Α╬┐╬ψ╬╖╧Δ╬╖"
             );
 
             console.log(
-                "Αποστολέας:",
+                "╬Σ╧Α╬┐╧Δ╧Ε╬┐╬╗╬φ╬▒╧Γ:",
                 req.authUser.uid
             );
 
             console.log(
-                "Ρόλος:",
+                "╬κ╧Ν╬╗╬┐╧Γ:",
                 req.authUser.role
             );
 
             console.log(
-                "Χρήστες:",
+                "╬π╧Β╬χ╧Δ╧Ε╬╡╧Γ:",
                 matchedUsers
             );
 
             console.log(
-                "Με tokens:",
+                "╬ε╬╡ tokens:",
                 usersWithTokens
             );
 
             console.log(
-                "Επιτυχίες:",
+                "╬Χ╧Α╬╣╧Ε╧Ζ╧Θ╬ψ╬╡╧Γ:",
                 successCount
             );
 
             console.log(
-                "Αποτυχίες:",
+                "╬Σ╧Α╬┐╧Ε╧Ζ╧Θ╬ψ╬╡╧Γ:",
                 failureCount
             );
 
@@ -1054,7 +1108,7 @@ app.post(
                 .json({
                     success: false,
                     error:
-                        "Αποτυχία στοχευμένης αποστολής.",
+                        "╬Σ╧Α╬┐╧Ε╧Ζ╧Θ╬ψ╬▒ ╧Δ╧Ε╬┐╧Θ╬╡╧Ζ╬╝╬φ╬╜╬╖╧Γ ╬▒╧Α╬┐╧Δ╧Ε╬┐╬╗╬χ╧Γ.",
                     details:
                         error.message,
                 });
@@ -1063,7 +1117,7 @@ app.post(
 );
 
 // ============================================================
-// 🗑 DELETE USER
+// ΏθΩΣ DELETE USER
 // ============================================================
 
 app.post(
@@ -1082,7 +1136,7 @@ app.post(
                     .json({
                         success: false,
                         error:
-                            "Δεν δόθηκε UID χρήστη.",
+                            "╬Φ╬╡╬╜ ╬┤╧Ν╬╕╬╖╬║╬╡ UID ╧Θ╧Β╬χ╧Δ╧Ε╬╖.",
                     });
             }
 
@@ -1098,7 +1152,7 @@ app.post(
                     .json({
                         success: false,
                         error:
-                            "Δεν μπορείτε να διαγράψετε τον δικό σας λογαριασμό.",
+                            "╬Φ╬╡╬╜ ╬╝╧Α╬┐╧Β╬╡╬ψ╧Ε╬╡ ╬╜╬▒ ╬┤╬╣╬▒╬│╧Β╬υ╧Ι╬╡╧Ε╬╡ ╧Ε╬┐╬╜ ╬┤╬╣╬║╧Ν ╧Δ╬▒╧Γ ╬╗╬┐╬│╬▒╧Β╬╣╬▒╧Δ╬╝╧Ν.",
                     });
             }
 
@@ -1263,8 +1317,8 @@ app.post(
                         targetUid
                     );
             } catch (error) {
-                // Αν έχει ήδη διαγραφεί από Authentication,
-                // θεωρούμε τη διαδικασία επιτυχημένη.
+                // ╬Σ╬╜ ╬φ╧Θ╬╡╬╣ ╬χ╬┤╬╖ ╬┤╬╣╬▒╬│╧Β╬▒╧Η╬╡╬ψ ╬▒╧Α╧Ν Authentication,
+                // ╬╕╬╡╧Κ╧Β╬┐╧Ξ╬╝╬╡ ╧Ε╬╖ ╬┤╬╣╬▒╬┤╬╣╬║╬▒╧Δ╬ψ╬▒ ╬╡╧Α╬╣╧Ε╧Ζ╧Θ╬╖╬╝╬φ╬╜╬╖.
                 if (
                     error.code !==
                     "auth/user-not-found"
@@ -1278,7 +1332,7 @@ app.post(
             );
 
             console.log(
-                "🗑 USER DELETED"
+                "ΏθΩΣ USER DELETED"
             );
 
             console.log(
@@ -1287,17 +1341,17 @@ app.post(
             );
 
             console.log(
-                "Όνομα:",
+                "╬Ν╬╜╬┐╬╝╬▒:",
                 fullName
             );
 
             console.log(
-                "Ρόλος:",
+                "╬κ╧Ν╬╗╬┐╧Γ:",
                 targetRole
             );
 
             console.log(
-                "Από:",
+                "╬Σ╧Α╧Ν:",
                 requesterUid
             );
 
@@ -1311,7 +1365,7 @@ app.post(
                     success: true,
 
                     message:
-                        "Ο χρήστης διαγράφηκε επιτυχώς.",
+                        "╬θ ╧Θ╧Β╬χ╧Δ╧Ε╬╖╧Γ ╬┤╬╣╬▒╬│╧Β╬υ╧Η╬╖╬║╬╡ ╬╡╧Α╬╣╧Ε╧Ζ╧Θ╧Ο╧Γ.",
 
                     uid:
                         targetUid,
@@ -1335,14 +1389,14 @@ app.post(
 
                     error:
                         error.message ||
-                        "Αποτυχία διαγραφής χρήστη.",
+                        "╬Σ╧Α╬┐╧Ε╧Ζ╧Θ╬ψ╬▒ ╬┤╬╣╬▒╬│╧Β╬▒╧Η╬χ╧Γ ╧Θ╧Β╬χ╧Δ╧Ε╬╖.",
                 });
         }
     }
 );
 
 // ============================================================
-// 🚀 START SERVER
+// ΏθγΑ START SERVER
 // ============================================================
 
 app.listen(
@@ -1350,7 +1404,7 @@ app.listen(
     "0.0.0.0",
     () => {
         console.log(
-            `🚀 Backend FCM v1 τρέχει στο 0.0.0.0:${PORT}`
+            `ΏθγΑ Backend FCM v1 ╧Ε╧Β╬φ╧Θ╬╡╬╣ ╧Δ╧Ε╬┐ 0.0.0.0:${PORT}`
         );
     }
 );
